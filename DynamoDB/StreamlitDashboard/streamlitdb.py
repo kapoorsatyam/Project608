@@ -1,3 +1,4 @@
+import io
 import boto3
 import pandas as pd
 import streamlit as st
@@ -8,6 +9,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Set page config
 st.set_page_config(layout="wide", page_title="Weather Analytics Dashboard", page_icon="🌦️")
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def load_forecasted_data(bucket_name, file_key):
+    s3 = boto3.client('s3')
+    response = s3.get_object(Bucket=bucket_name, Key=file_key)
+    return pd.read_csv(io.BytesIO(response['Body'].read()))
+
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_complete_weather_data():
@@ -123,9 +131,14 @@ def main():
     # Load data
     with st.spinner('Loading complete weather data from DynamoDB...'):
         df = load_complete_weather_data()
+        df_forecast = load_forecasted_data('kapoors3bucket', 'forecast_df.csv')
     
     if df.empty:
         st.error("Failed to load data from DynamoDB")
+        return
+    
+    if df_forecast.empty:
+        st.error("Failed to load forecasted data from S3")
         return
     
     st.title("🌦️ Complete Weather Analytics Dashboard")
@@ -147,6 +160,7 @@ def main():
         st.markdown("- Precipitation & humidity analysis")
         st.markdown("- Hourly temperature patterns")
         st.markdown("- Temperature correlations")
+        st.markdown("- Forecast")
         st.markdown("---")
     
     st.markdown("*Data Source: [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api)*")
@@ -157,7 +171,7 @@ def main():
                  'July', 'August', 'September', 'October', 'November', 'December']
 
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["🌡️ Temperature Analysis", "💧 Precipitation & Weather", "📊 Statistical Insights"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🌡️ Temperature Analysis", "💧 Precipitation & Weather", "📊 Statistical Insights", "🌤️ Forecast"])
 
     # Tab 1: Temperature Analysis
     with tab1:
@@ -366,6 +380,63 @@ def main():
             
         except Exception as e:
             st.error(f"Error calculating correlations: {str(e)}")
+
+    # Tab 4: Forecast
+
+    with tab4:
+        st.subheader(f"Temperature Forecast for {selected_city}")
+        
+        # Filter the forecast data for the selected city
+        city_forecast = df_forecast[df_forecast['Location'] == selected_city]
+        
+        # Ensure the 'time' column is in datetime format (if it's not already)
+        city_forecast['time'] = pd.to_datetime(city_forecast['time'])
+        
+        # Create the forecast temperature line plot
+        forecast_fig = px.line(
+            city_forecast,
+            x='time',
+            y='forecast_temp',
+            markers=True,
+            title=f"Temperature Forecast for {selected_city}",
+            labels={'forecast_temp': 'Temperature (°C)', 'time': 'Time'}
+        )
+        
+        # Calculate the boundaries (e.g., ±1°C)
+        upper_bound = city_forecast['forecast_temp'] + 1  # Upper Bound (Forecast + 1)
+        lower_bound = city_forecast['forecast_temp'] - 1  # Lower Bound (Forecast - 1)
+        
+        # Add the upper and lower boundaries as shaded regions
+        forecast_fig.add_traces(go.Scatter(
+            x=city_forecast['time'], 
+            y=upper_bound, 
+            fill=None, 
+            mode='lines',
+            line=dict(color='green', dash='dot'),
+            name='Upper Bound'
+        ))
+
+        forecast_fig.add_traces(go.Scatter(
+            x=city_forecast['time'], 
+            y=lower_bound, 
+            fill='tonexty',  # Fill the area between the upper and lower bounds
+            mode='lines',
+            line=dict(color='green', dash='dot'),
+            name='Lower Bound',
+            fillcolor='rgba(0, 255, 0, 0.2)'  # Set the shaded region color (light green)
+        ))
+
+        # Update layout for the chart
+        forecast_fig.update_layout(
+            template='plotly_white',
+            height=400,
+            xaxis=dict(title="Time", tickformat="%H:%M", tickmode="array"),
+            yaxis_title="Forecasted Temperature (°C)",
+            title=f"Temperature Forecast for {selected_city}"
+        )
+        
+        # Display the forecast temperature chart
+        st.plotly_chart(forecast_fig, use_container_width=True)
 
     # Dashboard styling
     st.markdown("""
