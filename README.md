@@ -4,7 +4,6 @@ This repository contains several scripts designed to fetch, process, and store w
 
 ### Note:
 - **Primary Data Source**: All data is primarily stored in **DynamoDB** for efficient and scalable retrieval.
-- **Backup Data Source**: The scripts `api_daily_S3.py` and `api_historical_S3.ipynb` are designed to fetch and store data in **S3** as a backup.
 
 ## Scripts Overview
 
