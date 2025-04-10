@@ -47,7 +47,6 @@ for col in numeric_cols:
 
 # Ensure 'time' column is datetime and set it as the index
 df['time'] = pd.to_datetime(df['time'])
-df['time'] = df['time'] + pd.Timedelta(hours=14)
 df.set_index('time', inplace=True)
 
 # Define the forecast steps
@@ -126,8 +125,6 @@ final_forecasts_df = pd.concat(all_forecasts)
 
 # Reset index and ensure 'time' is properly set
 final_forecasts_df.reset_index(drop=True, inplace=True)
-
-final_forecasts_df['time'] = final_forecasts_df['time'] + pd.Timedelta(days=1)
 
 final_forecasts_df.to_csv("forecast_df.csv", index=False)
 
